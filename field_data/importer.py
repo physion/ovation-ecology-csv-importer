@@ -20,6 +20,9 @@ def import_csv(context, container_id=None, protocol_id=None, files=[]):
     for f in files:
         _import_file(context, container, protocol, f)
 
+def _make_day_ends(d):
+    return (d, d.plusDays(1).minusSeconds(1))
+
 def _import_file(context, container, protocol, file_name):
 
     df = pd.read_csv(file_name)
@@ -36,14 +39,14 @@ def _import_file(context, container, protocol, file_name):
 
 
     epoch_data = df.groupby(['DATE','SITE'])
-
+    groups = {}
     for (name, group) in epoch_data:
         logging.info("Adding data for CSV group" + str(name))
 
         # Get the Source object corresponding to this site
-        plot_name = name[2]
+        plot_name = name[1]
         plot = sites[plot_name]
-        start,end = make_day_ends(group.iloc[0]['DATE'])
+        start,end = _make_day_ends(group.iloc[0]['DATE'])
 
         if start not in groups:
             group_name = "{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth())
@@ -61,12 +64,12 @@ def _import_file(context, container, protocol, file_name):
             species = row['SPECIES']
             print("  {}".format(species))
 
-            flower_count = row['# FLOWERS']
+            flower_count = row['COUNT']
             series = pd.Series(data=(flower_count,), index=(species,))
             tmp = tempfile.NamedTemporaryFile(prefix="{}-{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth(), plot_name),
                                                 suffix=".csv",
                                                 delete=False)
-            temp_data_frame = pd.DataFrame({'# FLOWERS' : series })
+            temp_data_frame = pd.DataFrame({'COUNT' : series })
             temp_data_frame.to_csv(tmp.name, index_label="Species")
 
             # Tag the Source with the species found there
