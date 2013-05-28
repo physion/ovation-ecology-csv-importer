@@ -5,11 +5,16 @@
 import logging
 
 import pandas as pd
+import numpy as np
+
+from field_data.utils import read_csv
 
 from ovation import *
 from ovation.core import *
 
-def import_csv(context, container_id=None, protocol_id=None, files=[]):
+_CSV_HEADER_ROW = 2
+
+def import_csv(context, container_id=None, protocol_id=None, files=[], timezone=None):
 
     assert(not protocol_id is None)
     assert(not container_id is None)
@@ -18,65 +23,75 @@ def import_csv(context, container_id=None, protocol_id=None, files=[]):
     protocol = Protocol.cast_(context.getObjectWithUuid(UUID.fromString(protocol_id)))
 
     for f in files:
-        _import_file(context, container, protocol, f)
+        _import_file(context, container, protocol, f, _CSV_HEADER_ROW, timezone)
 
-def _make_day_ends(d):
-    return (d, d.plusDays(1).minusSeconds(1))
+def _make_day_ends(python_datetime, tzone):
+    """Makes a midnight,end-of-day DateTime pair from Python datetime and timezone ID"""
 
-def _import_file(context, container, protocol, file_name):
+    d = DateTime(python_datetime.isoformat(), DateTimeZone.forID(tzone))
+    return (d.toDateMidnight().toDateTime(), d.plusDays(1).minusSeconds(1))
 
-    df = pd.read_csv(file_name)
+def _import_file(context, container, protocol, file_name, header_row, timezone):
 
-    # Organize sources
+    df = read_csv(file_name, header_row=header_row)
+
+    # Organize sources; this should be replaced with getSourceWithName() or a query
     sites = {}
-    for src in context.getSources():
+    for src in context.getTopLevelSources():
         sites[src.getName()] = src
 
-    for plot in df.SITE:
+    for plot in df.Site:
         if plot not in sites:
             logging.info("Adding site " + plot)
             sites[plot] = context.insertSource(plot, plot) #TODO better name?
 
 
-    epoch_data = df.groupby(['DATE','SITE'])
+    # Group EpochData by (index, Site), i.e. (Date, Site)
+    epoch_data = df.groupby([lambda x: x, lambda y: df.loc[y]['Site']])
     groups = {}
-    for (name, group) in epoch_data:
-        logging.info("Adding data for CSV group" + str(name))
+    for grp in EpochGroupContainer.cast_(container).getEpochGroups():
+        groups[TimelineElement.cast_(grp).getStart()] = grp
+
+    for (group_index, group) in epoch_data:
+        logging.info("Adding data for CSV group" + str(group_index))
 
         # Get the Source object corresponding to this site
-        plot_name = name[1]
+        plot_name = group_index[1]
         plot = sites[plot_name]
-        start,end = _make_day_ends(group.iloc[0]['DATE'])
+        pystart = group_index[0]
+        start,end = _make_day_ends(pystart, timezone)
 
-        if start not in groups:
+        if pystart not in groups:
             group_name = "{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth())
             print("Adding EpochGroup {}".format(group_name))
-            groups[start] = EpochGroupContainer.cast_(experiment).insertEpochGroup(group_name, start, protocol, None, None) # No protocol, params, or deviceParams
+            groups[pystart] = EpochGroupContainer.cast_(container).insertEpochGroup(group_name, start, protocol, None, None) # No protocol, params, or deviceParams
 
-        epoch_group = groups[start]
+        epoch_group = groups[pystart]
 
         srcMap = Maps.newHashMap()
         srcMap.put(plot_name, plot)
         outputMap = Maps.newHashMap()
+
+        # We should check if Epoch already exists
         epoch = EpochContainer.cast_(epoch_group).insertEpoch(srcMap, outputMap, start, end, protocol, None, None)
 
         for (i, row) in group.iterrows():
-            species = row['SPECIES']
+            species = row['Species']
             print("  {}".format(species))
 
-            flower_count = row['COUNT']
-            series = pd.Series(data=(flower_count,), index=(species,))
-            tmp = tempfile.NamedTemporaryFile(prefix="{}-{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth(), plot_name),
-                                                suffix=".csv",
-                                                delete=False)
-            temp_data_frame = pd.DataFrame({'COUNT' : series })
-            temp_data_frame.to_csv(tmp.name, index_label="Species")
-
-            # Tag the Source with the species found there
-            taggable(plot).addTag(species)
-
-            srcNames = Sets.newHashSet()
-            srcNames.add(plot_name)
-            epoch.insertMeasurement(species,  srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
+            # flower_count = row['Count']
+            # series = pd.Series(data=(flower_count,), index=(species,))
+            # tmp = tempfile.NamedTemporaryFile(prefix="{}-{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth(), plot_name),
+            #                                     suffix=".csv",
+            #                                     delete=False)
+            # temp_data_frame = pd.DataFrame({'Count' : series })
+            # temp_data_frame.to_csv(tmp.name, index_label="Species")
+            #
+            # # Tag the Source with the species found there
+            # taggable(plot).addTag(species)
+            #
+            # srcNames = Sets.newHashSet()
+            # srcNames.add(plot_name)
+            # epoch.insertMeasurement(species,  srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
 
 

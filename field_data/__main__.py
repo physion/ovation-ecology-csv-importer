@@ -15,12 +15,18 @@ def main():
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
 
-    auth_group = parser.add_argument_group("authentication")
+    auth_group = parser.add_argument_group('authentication')
     auth_group.add_argument('--user', help='ovation.io user email')
 
-    parser.add_argument("files", metavar="f.csv", nargs="+", type=str)#argparse.FileType('r'))
+    parser.add_argument('files', metavar='f.csv', nargs='+', type=str)#argparse.FileType('r'))
 
-    experiment_group = parser.add_argument_group("epoch container")
+    csv_group = parser.add_argument_group("CSV")
+    csv_group.add_argument('--header-rows', help='number of csv header rows. Default = 2', default=2)
+    csv_group.add_arguent('--date-column', help='column number of measurement date (0-indexed). Default = 1', default=1)
+
+    parser.add_argument('--timezone', default=None, help='timezone name in which data was collected. Default = local time zone')
+
+    experiment_group = parser.add_argument_group('epoch container')
     experiment_group.add_argument('--container', help='epoch container ID', required=True)
     experiment_group.add_argument('--protocol', help='protocol ID', required=True)
 
@@ -30,7 +36,7 @@ def main():
     logging.basicConfig(filename='import.log',level=logging.INFO)
 
     if args.user is None:
-        args.user = raw_input("ovation.io user: ")
+        args.user = raw_input('ovation.io user: ')
 
     password = getpass.getpass(prompt='ovation.io password: ')
 
@@ -40,7 +46,8 @@ def main():
     return import_csv(ctx,
                       container_id=args.container,
                       protocol_id=args.protocol,
-                      files=args.files)
+                      files=args.files,
+                      timezone=args.timezone)
 
 
 
