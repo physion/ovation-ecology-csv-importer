@@ -111,6 +111,8 @@ class TestImporter(TestBase):
 
     @istest
     def should_tag_site_with_species(self):
+        species = set(self.df.Species)
+
         for group in EpochGroupContainer.cast_(self.expt).getEpochGroups():
             for epoch in EpochContainer.cast_(group).getEpochs():
                 src_map = to_dict(epoch.getInputSources())
@@ -118,7 +120,7 @@ class TestImporter(TestBase):
                     tags = set(taggable(src).getAllTags())
                     assert(len(tags) > 0)
                     for tag in tags:
-                        assert(tag in self.df.Species)
+                        assert(tag in species)
 
 
     @istest
