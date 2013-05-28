@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from ovation import DateTime
 from ovation.core import *
+from ovation.conversion import to_dict
+from ovation.wrapper import taggable, property_annotatable
 from ovation.testing import TestBase
 
 from field_data.importer import import_csv
@@ -18,7 +20,7 @@ class TestImporter(TestBase):
     def make_experiment_fixture(cls):
         ctx = cls.dsc.getContext()
         project = ctx.insertProject("name", "description", DateTime())
-        expt = project.insertExperiment("purose", DateTime())
+        expt = project.insertExperiment("purpose", DateTime())
         protocol = ctx.insertProtocol("protocol", "description")
         return ctx, expt, protocol
 
@@ -62,25 +64,62 @@ class TestImporter(TestBase):
 
         assert_equals(number_of_days, len(list(EpochGroupContainer.cast_(self.expt).getEpochGroups())))
 
-    @istest
-    def should_add_one_epoch_per_site(self):
+    def check_epoch_per_site(self, container):
         # One Epoch per site per day
         numer_of_sites = len(self.group_sites())
-
         n_epochs = 0
-        for group in EpochGroupContainer.cast_(self.expt).getEpochGroups():
+        for group in EpochGroupContainer.cast_(container).getEpochGroups():
             n_epochs += len(list(EpochContainer.cast_(group).getEpochs()))
-
         assert_equals(numer_of_sites, n_epochs)
 
+    @istest
+    def should_add_one_epoch_per_site(self):
+        self.check_epoch_per_site(self.expt)
+
+    @istest
+    def should_use_existing_sources(self):
+        expt2 = self.ctx.insertProject("project2","project2",DateTime()).insertExperiment("purpose", DateTime())
+        protocol2 = self.ctx.insertProtocol("protocol", "description")
+
+        import_csv(self.ctx,
+                   container_id=str(expt2.getUuid()),
+                   protocol_id=str(protocol2.getUuid()),
+                   files=[EXAMPLE_FIELD_DATA_CSV])
+
+        expected_source_names = np.unique(self.df.Site)
+
+        sources = self.ctx.getTopLevelSources()
+
+        assert_equals(len(expected_source_names), len(list(sources)))
+
+    @istest
+    def should_use_existing_site_epoch_when_present(self):
+        expt2 = self.ctx.insertProject("project2","project2",DateTime()).insertExperiment("purpose", DateTime())
+        protocol2 = self.ctx.insertProtocol("protocol", "description")
+
+        import_csv(self.ctx,
+                   container_id=str(expt2.getUuid()),
+                   protocol_id=str(protocol2.getUuid()),
+                   files=[EXAMPLE_FIELD_DATA_CSV])
+
+        import_csv(self.ctx,
+                   container_id=str(expt2.getUuid()),
+                   protocol_id=str(protocol2.getUuid()),
+                   files=[EXAMPLE_FIELD_DATA_CSV])
+
+        self.check_epoch_per_site(expt2)
 
     @istest
     def should_tag_site_with_species(self):
-        for (group, (i, df_group)) in zip(EpochGroupContainer.cast_(self.expt).getEpochGroups(),
-                                          self.group_sites()):
-            number_of_sites = len(df_group)
+        for group in EpochGroupContainer.cast_(self.expt).getEpochGroups():
+            for epoch in EpochContainer.cast_(group).getEpochs():
+                src_map = to_dict(epoch.getInputSources())
+                for src in src_map.values():
+                    tags = set(taggable(src).getAllTags())
+                    assert(len(tags) > 0)
+                    for tag in tags:
+                        assert(tag in self.df.Species)
 
-            assert_equals(number_of_sites, len(list(EpochContainer.cast_(group).getEpochs())))
 
     @istest
     def should_add_site_flower_measurements(self):
