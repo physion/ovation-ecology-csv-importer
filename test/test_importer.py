@@ -174,17 +174,28 @@ class TestImporter(TestBase):
                                 expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
                                 assert(np.all(data[group['Counting'][i]] == expected_measurements))
 
+    def collect_epochs_by_site(self, epoch_groups, ts):
+        epochs = {}
+        for e in EpochContainer.cast_(epoch_groups[ts]).getEpochs():
+            sources = to_dict(e.getInputSources())
+            for s in sources.values():
+                if s.getLabel() in self.df.Site.base:
+                    epochs[s.getLabel()] = e
+        return epochs
+
     @istest
     def should_add_individual_measurement_sources(self):
         epoch_groups = self.epoch_groups_by_timestamp()
 
         for ((ts,site), group) in self.group_sites():
-            epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
-            for e in epochs:
+            epochs = self.collect_epochs_by_site(epoch_groups, ts)
+
+            e = epochs[site]
+            if 'individual' in list(taggable(e).getAllTags()):
                 for i in xrange(len(group)):
                     if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
                         print(e.getInputSources(), group['Species'][i], i)
-                        assert_true(e.getInputSources().containsKey(u"{}_{}".format(group['Species'][i],i+1)))
+                        assert_true(e.getInputSources().containsKey(u"{} {}".format(group['Species'][i],i+1)))
 
 
 

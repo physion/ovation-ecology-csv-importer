@@ -99,6 +99,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
         ts = group_index[0]
         start,end = _make_day_ends(ts, timezone)
 
+        # One EpochGroup per day
         if ts not in groups:
             group_name = "{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth())
             print("Adding EpochGroup {}".format(group_name))
@@ -113,9 +114,8 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
             for src in src_map.values():
                 epochs[src.getLabel()] = epoch
 
-
-        # We should check if Epoch already exists
         if not plot_name in epochs:
+            print("Inserting Epoch for measurements at: {}".format(plot_name))
             epochs[plot_name] = EpochContainer.cast_(epoch_group).insertEpoch(start, end, protocol, None, None)
 
         epoch = epochs[plot_name]
@@ -145,8 +145,8 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                                                protocol,
                                                Maps.newHashMap(),
                                                Optional.absent(),
-                                               "{}_{}".format(species, i+1),
-                                               species)
+                                               u"{} {}".format(species, i+1),
+                                               u"{}-{}-{}-{}".format(species, plot_name, start.toString(), i+1),)
 
                 epoch.addInputSource(individual.getLabel(), individual)
                 srcNames = Sets.newHashSet()
