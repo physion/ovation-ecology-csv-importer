@@ -11,7 +11,7 @@ from ovation.connection import connect
 DESCRIPTION = """Import field CSV data into the local Ovation database.
 """
 
-def main(args=sys.argv):
+def main(args=sys.argv, dsc=None):
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
 
@@ -32,7 +32,9 @@ def main(args=sys.argv):
                            help='column number of first measurement. Default = {}'.format(FIRST_MEASUREMENT_COLUMN_NUMBER),
                            default=FIRST_MEASUREMENT_COLUMN_NUMBER)
 
-    parser.add_argument('--timezone', default=None, help='timezone name in which data was collected. Default = local time zone')
+    parser.add_argument('--timezone',
+                        default=None,
+                        help='timezone name in which data was collected. Default = local time zone')
 
     experiment_group = parser.add_argument_group('epoch container')
     experiment_group.add_argument('--container', help='epoch container ID', required=True)
@@ -43,15 +45,19 @@ def main(args=sys.argv):
 
     logging.basicConfig(filename='import.log',level=logging.INFO)
 
-    if args.user is None:
-        args.user = raw_input('ovation.io user: ')
 
-    if args.password is None:
-        password = getpass.getpass(prompt='ovation.io password: ')
-    else:
-        password = args.password
 
-    dsc = connect(args.user, password)
+    if dsc is None:
+        if args.user is None:
+            args.user = raw_input('ovation.io user: ')
+
+        if args.password is None:
+            password = getpass.getpass(prompt='ovation.io password: ')
+        else:
+            password = args.password
+
+        dsc = connect(args.user, password)
+
     ctx = dsc.getContext()
 
     try:
@@ -63,8 +69,8 @@ def main(args=sys.argv):
                           csv_header_row=args.header_rows,
                           date_column=args.date_column,
                           first_measurement_column=args.measurement_column)
-    except Exception, e:
-        logging.error('Unable to import {}'.format(args.files), e)
+    except Exception:
+        logging.error('Unable to import {}'.format(args.files), exc_info=True)
         return 1
 
 

@@ -223,14 +223,12 @@ class TestImporter(TestBase):
 
         number_of_days = np.unique(np.asarray(self.df.index)).size
 
-        args = ['--user={}'.format('user'),
-                '--password={}'.format('password'),
-                '--timezone="America/New_York"',
+        args = ['--timezone=America/New_York',
                 '--container={}'.format(str(expt2.getUuid())),
                 '--protocol={}'.format(str(protocol2.getUuid())),
                 EXAMPLE_FIELD_DATA_CSV,
                 ]
 
-        main(args)
+        main(args, dsc=self.dsc)
 
         assert_equals(number_of_days, len(list(EpochGroupContainer.cast_(expt2).getEpochGroups())))

@@ -40,6 +40,9 @@ def import_csv(context,
     container = EpochContainer.cast_(context.getObjectWithUuid(UUID.fromString(container_id)))
     protocol = Protocol.cast_(context.getObjectWithUuid(UUID.fromString(protocol_id)))
 
+    if timezone is None:
+        timezone = DateTimeZone.getDefault().getID()
+
     for f in files:
         _import_file(context,
                      container,
