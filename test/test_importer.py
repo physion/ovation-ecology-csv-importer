@@ -1,4 +1,5 @@
-from nose.tools import istest, assert_equals
+import datetime
+from nose.tools import istest, assert_equals, assert_true
 
 import pandas as pd
 import numpy as np
@@ -8,8 +9,13 @@ from ovation.conversion import to_dict
 from ovation.wrapper import taggable, property_annotatable
 from ovation.testing import TestBase
 
-from field_data.importer import import_csv
+from field_data.importer import import_csv, \
+    MEASUREMENT_TYPE_SITE, \
+    FIRST_MEASUREMENT_COLUMN_NUMBER, \
+    MEASUREMENT_TYPE_INDIVIDUAL
 from field_data.utils import read_csv
+from field_data.__main__ import main
+
 
 EXAMPLE_FIELD_DATA_CSV = "fixtures/example_field_data.csv"
 
@@ -123,15 +129,79 @@ class TestImporter(TestBase):
                         assert(tag in species)
 
 
+    def epoch_groups_by_timestamp(self):
+        epoch_groups = {}
+        for grp in EpochGroupContainer.cast_(self.expt).getEpochGroups():
+            d = TimelineElement.cast_(grp).getStart()
+            ts = pd.Timestamp(
+                datetime.datetime(d.getYear(), d.getMonthOfYear(), d.getDayOfMonth(), d.getHourOfDay(),
+                                  d.getMinuteOfHour(),
+                                  d.getSecondOfMinute()))
+            epoch_groups[ts] = grp
+        return epoch_groups
+
     @istest
-    def should_add_site_flower_measurements(self):
+    def should_add_repeated_site_measurements(self):
+        epoch_groups = self.epoch_groups_by_timestamp()
+
+        for ((ts,site), group) in self.group_sites():
+            epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
+            for e in epochs:
+                for (i, m) in enumerate(e.getMeasurements()):
+                    if group['Type'][i] == MEASUREMENT_TYPE_SITE:
+                        csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                        data = pd.read_csv(csv_path)
+                        expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
+                        assert(np.all(data[group['Counting'][i]] == expected_measurements))
+
+
+
+    @istest
+    def should_add_individual_measurements(self):
+        epoch_groups = self.epoch_groups_by_timestamp()
+
+        for ((ts,site), group) in self.group_sites():
+            epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
+            for e in epochs:
+                for (i, m) in enumerate(e.getMeasurements()):
+                    if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
+                        csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                        data = pd.read_csv(csv_path)
+                        expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
+                        assert(np.all(data[group['Counting'][i]] == expected_measurements))
+
+    @istest
+    def should_add_individual_measurement_sources(self):
+        epoch_groups = self.epoch_groups_by_timestamp()
+
+        for ((ts,site), group) in self.group_sites():
+            epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
+            for e in epochs:
+                for i in xrange(len(group)):
+                    if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
+                        assert_true(e.getInputSources().containsKey("{}_{}".format(group['Species'][i],i)))
+
+
+
+    @istest
+    def should_annotate_measurements_with_observer(self):
         raise NotImplementedError()
 
     @istest
-    def should_add_individual_flowers_per_stalk_measurement(self):
-        raise NotImplementedError()
+    def should_call_via_main(self):
+        expt2 = self.ctx.insertProject("project2","project2",DateTime()).insertExperiment("purpose", DateTime())
+        protocol2 = self.ctx.insertProtocol("protocol", "description")
 
-    @istest
-    def should_add_individual_stalks_measurement(self):
-        raise NotImplementedError()
+        number_of_days = np.unique(np.asarray(self.df.index)).size
 
+        args = ['--user={}'.format('user'),
+                '--password={}'.format('password'),
+                '--timezone="America/New_York"',
+                '--container={}'.format(str(expt2.getUuid())),
+                '--protocol={}'.format(str(protocol2.getUuid())),
+                EXAMPLE_FIELD_DATA_CSV,
+                ]
+
+        main(args)
+
+        assert_equals(number_of_days, len(list(EpochGroupContainer.cast_(expt2).getEpochGroups())))
