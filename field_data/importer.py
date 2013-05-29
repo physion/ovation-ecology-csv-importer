@@ -11,7 +11,7 @@ import numpy as np
 
 from ovation import *
 from ovation.core import *
-from ovation.wrapper import taggable
+from ovation.wrapper import taggable, property_annotatable
 from ovation.conversion import to_dict
 
 from field_data.utils import read_csv
@@ -56,7 +56,7 @@ def _make_day_ends(python_datetime, tzone):
     return (d.toDateMidnight().toDateTime(), d.plusDays(1).minusSeconds(1))
 
 
-def insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start):
+def insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start, observer):
     tmp = tempfile.NamedTemporaryFile(
         prefix="{}-{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth(),
                                     plot_name.replace('#', '')),
@@ -64,7 +64,8 @@ def insert_measurements(epoch, group, i, measurements, plot_name, species, srcNa
         delete=False)
     temp_data_frame = pd.DataFrame({group['Counting'][i]: measurements})
     temp_data_frame.to_csv(tmp.name, index_label="Measurement")
-    epoch.insertMeasurement(species, srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
+    m = epoch.insertMeasurement(species, srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
+    property_annotatable(m).addProperty('Observer', observer)
 
 
 def _import_file(context, container, protocol, file_name, header_row, timezone, first_measurement_column_number, date_column):
@@ -136,7 +137,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                 srcNames = Sets.newHashSet()
                 srcNames.add(plot_name)
 
-                insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start)
+                insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start, observer)
 
             elif group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
                 individual = plot.insertSource(EpochGroupContainer.cast_(epoch_group),
@@ -151,7 +152,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                 epoch.addInputSource(individual.getLabel(), individual)
                 srcNames = Sets.newHashSet()
                 srcNames.add(individual.getLabel())
-                insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start)
+                insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start, observer)
                 taggable(epoch).addTag('individual')
 
 

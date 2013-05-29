@@ -75,7 +75,8 @@ class TestImporter(TestBase):
         num_sites = len(self.group_sites())
         n_epochs = 0
         for group in EpochGroupContainer.cast_(container).getEpochGroups():
-            n_epochs += len(list(EpochContainer.cast_(group).getEpochs()))
+            # Skip Epochs specifically for producing Sources
+            n_epochs += len([e for e in list(EpochContainer.cast_(group).getEpochs()) if e.getOutputSources().size() == 0])
         assert_equals(num_sites, n_epochs)
 
     @istest
@@ -146,15 +147,16 @@ class TestImporter(TestBase):
         epoch_groups = self.epoch_groups_by_timestamp()
 
         for ((ts,site), group) in self.group_sites():
-            epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
-            for e in epochs:
-                for i in xrange(len(group)):
-                    if group['Type'][i] == MEASUREMENT_TYPE_SITE:
-                        m = e.getMeasurement(group['Species'][i])
-                        csv_path = DataElement.cast_(m).getLocalDataPath().get()
-                        data = pd.read_csv(csv_path)
-                        expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
-                        assert(np.all(data[group['Counting'][i]] == expected_measurements))
+            epochs = self.collect_epochs_by_site(epoch_groups, ts)
+
+            e = epochs[site]
+            for i in xrange(len(group)):
+                if group['Type'][i] == MEASUREMENT_TYPE_SITE:
+                    m = e.getMeasurement(group['Species'][i])
+                    csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                    data = pd.read_csv(csv_path)
+                    expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
+                    assert(np.all(data[group['Counting'][i]] == expected_measurements))
 
 
 
@@ -163,16 +165,17 @@ class TestImporter(TestBase):
         epoch_groups = self.epoch_groups_by_timestamp()
 
         for ((ts,site), group) in self.group_sites():
-            epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
-            for e in epochs:
-                for i in xrange(len(group)):
-                    if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
-                        for m in e.getMeasurements():
-                            if m.getName().startswith(u"{}_{}".format(group['Species'][i],i+1)):
-                                csv_path = DataElement.cast_(m).getLocalDataPath().get()
-                                data = pd.read_csv(csv_path)
-                                expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
-                                assert(np.all(data[group['Counting'][i]] == expected_measurements))
+            epochs = self.collect_epochs_by_site(epoch_groups, ts)
+            e = epochs[site]
+
+            for i in xrange(len(group)):
+                if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
+                    for m in e.getMeasurements():
+                        if m.getName().startswith(u"{}_{}".format(group['Species'][i],i+1)):
+                            csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                            data = pd.read_csv(csv_path)
+                            expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
+                            assert(np.all(data[group['Counting'][i]] == expected_measurements))
 
     def collect_epochs_by_site(self, epoch_groups, ts):
         epochs = {}
@@ -201,7 +204,15 @@ class TestImporter(TestBase):
 
     @istest
     def should_annotate_measurements_with_observer(self):
-        raise NotImplementedError()
+        epoch_groups = self.epoch_groups_by_timestamp()
+
+        for ((ts,site), group) in self.group_sites():
+            epochs = self.collect_epochs_by_site(epoch_groups, ts)
+
+            e = epochs[site]
+            for i in xrange(len(group)):
+                m = e.getMeasurement(group['Species'][i])
+                assert_equals(group['Observer'][i], property_annotatable(m).getUserProperty(self.ctx.getAuthenticatedUser(), 'Observer'))
 
     @istest
     def should_call_via_main(self):
