@@ -210,9 +210,11 @@ class TestImporter(TestBase):
             epochs = self.collect_epochs_by_site(epoch_groups, ts)
 
             e = epochs[site]
+
             for i in xrange(len(group)):
-                m = e.getMeasurement(group['Species'][i])
-                assert_equals(group['Observer'][i], property_annotatable(m).getUserProperty(self.ctx.getAuthenticatedUser(), 'Observer'))
+                if len(list(e.getMeasurements())) > 0:
+                    m = e.getMeasurement(group['Species'][i])
+                    assert_equals(group['Observer'][i], str(property_annotatable(m).getUserProperty(self.ctx.getAuthenticatedUser(), 'Observer')))
 
     @istest
     def should_call_via_main(self):

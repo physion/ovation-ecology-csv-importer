@@ -5,6 +5,7 @@
 import logging
 import datetime
 import tempfile
+import time
 
 import pandas as pd
 import numpy as np
@@ -65,7 +66,8 @@ def insert_measurements(epoch, group, i, measurements, plot_name, species, srcNa
     temp_data_frame = pd.DataFrame({group['Counting'][i]: measurements})
     temp_data_frame.to_csv(tmp.name, index_label="Measurement")
     m = epoch.insertMeasurement(species, srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
-    property_annotatable(m).addProperty('Observer', observer)
+    time.sleep(1.0)
+    property_annotatable(m).addProperty('Observer', str(observer))
 
 
 def _import_file(context, container, protocol, file_name, header_row, timezone, first_measurement_column_number, date_column):
@@ -124,6 +126,8 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
         for i in xrange(len(group)):
             species = group['Species'][i]
             observer = group['Observer'][i]
+
+            print("    {}".format(species))
 
             # Tag the Source with the species found there
             taggable(plot).addTag(species)
