@@ -72,11 +72,11 @@ class TestImporter(TestBase):
 
     def check_epoch_per_site(self, container):
         # One Epoch per site per day
-        numer_of_sites = len(self.group_sites())
+        num_sites = len(self.group_sites())
         n_epochs = 0
         for group in EpochGroupContainer.cast_(container).getEpochGroups():
             n_epochs += len(list(EpochContainer.cast_(group).getEpochs()))
-        assert_equals(numer_of_sites, n_epochs)
+        assert_equals(num_sites, n_epochs)
 
     @istest
     def should_add_one_epoch_per_site(self):
@@ -123,10 +123,11 @@ class TestImporter(TestBase):
             for epoch in EpochContainer.cast_(group).getEpochs():
                 src_map = to_dict(epoch.getInputSources())
                 for src in src_map.values():
-                    tags = set(taggable(src).getAllTags())
-                    assert(len(tags) > 0)
-                    for tag in tags:
-                        assert(tag in species)
+                    if len(list(src.getParentSources())) == 0:
+                        tags = set(taggable(src).getAllTags())
+                        assert(len(tags) > 0)
+                        for tag in tags:
+                            assert(tag in species)
 
 
     def epoch_groups_by_timestamp(self):
@@ -147,8 +148,9 @@ class TestImporter(TestBase):
         for ((ts,site), group) in self.group_sites():
             epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
             for e in epochs:
-                for (i, m) in enumerate(e.getMeasurements()):
+                for i in xrange(len(group)):
                     if group['Type'][i] == MEASUREMENT_TYPE_SITE:
+                        m = e.getMeasurement(group['Species'][i])
                         csv_path = DataElement.cast_(m).getLocalDataPath().get()
                         data = pd.read_csv(csv_path)
                         expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
@@ -163,12 +165,14 @@ class TestImporter(TestBase):
         for ((ts,site), group) in self.group_sites():
             epochs = EpochContainer.cast_(epoch_groups[ts]).getEpochs()
             for e in epochs:
-                for (i, m) in enumerate(e.getMeasurements()):
+                for i in xrange(len(group)):
                     if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
-                        csv_path = DataElement.cast_(m).getLocalDataPath().get()
-                        data = pd.read_csv(csv_path)
-                        expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
-                        assert(np.all(data[group['Counting'][i]] == expected_measurements))
+                        for m in e.getMeasurements():
+                            if m.getName().startswith(u"{}_{}".format(group['Species'][i],i+1)):
+                                csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                                data = pd.read_csv(csv_path)
+                                expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
+                                assert(np.all(data[group['Counting'][i]] == expected_measurements))
 
     @istest
     def should_add_individual_measurement_sources(self):
@@ -179,7 +183,8 @@ class TestImporter(TestBase):
             for e in epochs:
                 for i in xrange(len(group)):
                     if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
-                        assert_true(e.getInputSources().containsKey("{}_{}".format(group['Species'][i],i)))
+                        print(e.getInputSources(), group['Species'][i], i)
+                        assert_true(e.getInputSources().containsKey(u"{}_{}".format(group['Species'][i],i+1)))
 
 
 

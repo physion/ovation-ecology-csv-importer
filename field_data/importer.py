@@ -114,10 +114,6 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                 epochs[src.getLabel()] = epoch
 
 
-        src_map = Maps.newHashMap()
-        src_map.put(plot_name, plot)
-        output_src_map = Maps.newHashMap()
-
         # We should check if Epoch already exists
         if not plot_name in epochs:
             epochs[plot_name] = EpochContainer.cast_(epoch_group).insertEpoch(start, end, protocol, None, None)
@@ -127,7 +123,6 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
         for i in xrange(len(group)):
             species = group['Species'][i]
             observer = group['Observer'][i]
-
 
             # Tag the Source with the species found there
             taggable(plot).addTag(species)
@@ -157,6 +152,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                 srcNames = Sets.newHashSet()
                 srcNames.add(individual.getLabel())
                 insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start)
+                taggable(epoch).addTag('individual')
 
 
     return 0
