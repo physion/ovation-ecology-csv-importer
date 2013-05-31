@@ -26,22 +26,25 @@ def main(args=sys.argv, dsc=None):
 
 
     def import_wrapper(ctx,
-                       container_id=None,
-                       protocol_id=None,
+                       container=None,
+                       protocol=None,
                        files=None,
                        timezone=None,
+                       header_rows=None,
+                       date_column=None,
+                       measurement_column=None,
                        **args):
 
         return import_csv(ctx,
-                          container_id=container_id,
-                          protocol_id=protocol_id,
+                          container_id=container,
+                          protocol_id=protocol,
                           files=files,
                           timezone=timezone,
-                          csv_header_row=args.header_rows,
-                          date_column=args.date_column,
-                          first_measurement_column=args.measurement_column)
+                          csv_header_row=header_rows,
+                          date_column=date_column,
+                          first_measurement_column=measurement_column)
 
-    return import_main(args=args,
+    return import_main(argv=args,
                        name='field_data',
                        description=DESCRIPTION,
                        file_ext='csv',
