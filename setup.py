@@ -4,6 +4,7 @@ from setuptools import setup
 
 VERSION = "1.0"
 OVATION_VERSION = "2.0-beta2"
+
 setup(name='field_data',
       version=VERSION,
       description='Ovation Field Data Importer',

@@ -12,17 +12,25 @@ To use the the ecology field data importer, install it into your Python interpre
 
 This will install the `field_data` module and all of its dependencies.
 
+If you don't have the `easy_install` program already, install the `setuptools` package by downloading
+[distribute_setup.py](http://python-distribute.org/distribute_setup.py) and installing `setuptools` before installing
+`field_data`:
+
+    python distribute_setup.py
+    easy_install field_data
+
+
 ## Usage
 
 The field data importer is run from the terminal command line. The basic usage looks like:
 
-	python -m field_data --timezone <time zone ID> --container <experiment ID> --protocol <protocol ID> file1.csv file2.csv...
+	python -m field_data --timezone <time zone ID> --container <experiment URI> --protocol <protocol URI> file1.csv file2.csv...
 
-You can get more information about the availble arguments by running:
+You can get more information about the available arguments by running:
 
 	python -m field_data -h
 
-To find the `Experiment` and `Protocol` IDs, you can copy-and-paste the relevant object(s) from the Ovation application or call the `getUuid()` method on either object within Python.
+To find the `Experiment` and `Protocol` URIs, you can copy-and-paste the relevant object(s) from the Ovation application or call the `getURI()` method on either object within Python.
 
 ## License
 
