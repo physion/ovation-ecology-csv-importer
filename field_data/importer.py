@@ -137,9 +137,9 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
             try:
                 plot.addTag(species)
             except JavaException:
-                print("Exception adding tag. Retrying...")
+                logging.error("Exception adding tag. Retrying...")
                 plot.addTag(species)
-                print("Success")
+                logging.info("Successfully added tag on second try")
 
             measurements = group.iloc[i, first_measurement_column_number:].dropna()
 
