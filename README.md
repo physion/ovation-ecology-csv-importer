@@ -8,7 +8,7 @@ This project provides a Python package for importing field data, recorded in CSV
 
 To use the the ecology field data importer, install it into your Python interpreter from the terminal command line:
 
-	easy_install field_data
+	easy_install field-data
 
 This will install the `field_data` module and all of its dependencies.
 
