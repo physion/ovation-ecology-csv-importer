@@ -6,13 +6,13 @@ import logging
 import datetime
 import tempfile
 import time
-from jnius.jnius import JavaException
 
 import pandas as pd
 
 
 from ovation import DateTimeZone, DateTime, Sets, Maps, autoclass, URL
 from ovation.conversion import to_dict, iterable, asclass
+from jnius.jnius import JavaException
 
 Optional = autoclass("com.google.common.base.Optional")
 
