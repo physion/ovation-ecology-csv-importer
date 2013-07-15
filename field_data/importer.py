@@ -6,14 +6,15 @@ import logging
 import datetime
 import tempfile
 import time
+from jnius.jnius import JavaException
 
 import pandas as pd
-import numpy as np
 
-from ovation import *
-from ovation.core import *
-from ovation.wrapper import taggable, property_annotatable
-from ovation.conversion import to_dict
+
+from ovation import DateTimeZone, DateTime, Sets, Maps, autoclass, URL
+from ovation.conversion import to_dict, iterable, asclass
+
+Optional = autoclass("com.google.common.base.Optional")
 
 from field_data.utils import read_csv
 
@@ -26,19 +27,19 @@ MEASUREMENT_TYPE_INDIVIDUAL = 'Individual'
 
 
 def import_csv(context,
-               container_id=None,
-               protocol_id=None,
+               container_uri=None,
+               protocol_uri=None,
                files=[],
                timezone=None,
                csv_header_row=CSV_HEADER_ROW,
                first_measurement_column=FIRST_MEASUREMENT_COLUMN_NUMBER,
                date_column=DATE_COLUMN_NUMBER):
 
-    assert(not protocol_id is None)
-    assert(not container_id is None)
+    assert(not protocol_uri is None)
+    assert(not container_uri is None)
 
-    container = EpochContainer.cast_(context.getObjectWithUuid(UUID.fromString(container_id)))
-    protocol = Protocol.cast_(context.getObjectWithUuid(UUID.fromString(protocol_id)))
+    container = asclass("us.physion.ovation.domain.mixin.EpochGroupContainer", context.getObjectWithURI(container_uri))
+    protocol = asclass("Protocol", context.getObjectWithURI(protocol_uri))
 
     if timezone is None:
         timezone = DateTimeZone.getDefault().getID()
@@ -70,7 +71,7 @@ def insert_measurements(epoch, group, i, measurements, plot_name, species, srcNa
     temp_data_frame.to_csv(tmp.name, index_label="Measurement")
     m = epoch.insertMeasurement(species, srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
     time.sleep(1.0)
-    property_annotatable(m).addProperty('Observer', str(observer))
+    m.addProperty('Observer', str(observer))
 
 
 def _import_file(context, container, protocol, file_name, header_row, timezone, first_measurement_column_number, date_column):
@@ -79,7 +80,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
 
     # Organize sources; this should be replaced with getSourceWithName() or a query
     sites = {}
-    for src in context.getTopLevelSources():
+    for src in iterable(context.getTopLevelSources()):
         sites[src.getLabel()] = src
 
     for plot in df.Site:
@@ -89,10 +90,10 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
 
 
     # Group EpochData by (index, Site), i.e. (Date, Site)
-    epoch_data = df.groupby([lambda x: x, lambda y: df.loc[y]['Site']])
+    epoch_data = df.groupby([df.index, 'Site'])
     groups = {}
-    for grp in EpochGroupContainer.cast_(container).getEpochGroups():
-        d = TimelineElement.cast_(grp).getStart()
+    for grp in iterable(container.getEpochGroups()):
+        d = grp.getStart()
         ts = pd.Timestamp(datetime.datetime(d.getYear(), d.getMonthOfYear(), d.getDayOfMonth(), d.getHourOfDay(), d.getMinuteOfHour(), d.getSecondOfMinute()))
         groups[ts] = grp
 
@@ -109,20 +110,20 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
         if ts not in groups:
             group_name = "{}-{}-{}".format(start.getYear(), start.getMonthOfYear(), start.getDayOfMonth())
             print("Adding EpochGroup {}".format(group_name))
-            groups[ts] = EpochGroupContainer.cast_(container).insertEpochGroup(group_name, start, protocol, None, None) # No protocol, params, or deviceParams
+            groups[ts] = container.insertEpochGroup(group_name, start, protocol, None, None) # No protocol, params, or deviceParams
 
         epoch_group = groups[ts]
 
         # Epoch by site
         epochs = {}
-        for epoch in EpochContainer.cast_(epoch_group).getEpochs():
+        for epoch in iterable(epoch_group.getEpochs()):
             src_map = to_dict(epoch.getInputSources())
             for src in src_map.values():
                 epochs[src.getLabel()] = epoch
 
         if not plot_name in epochs:
             print("Inserting Epoch for measurements at: {}".format(plot_name))
-            epochs[plot_name] = EpochContainer.cast_(epoch_group).insertEpoch(start, end, protocol, None, None)
+            epochs[plot_name] = epoch_group.insertEpoch(start, end, protocol, None, None)
 
         epoch = epochs[plot_name]
 
@@ -133,7 +134,12 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
             print("    {}".format(species))
 
             # Tag the Source with the species found there
-            taggable(plot).addTag(species)
+            try:
+                plot.addTag(species)
+            except JavaException:
+                print("Exception adding tag. Retrying...")
+                plot.addTag(species)
+                print("Success")
 
             measurements = group.iloc[i, first_measurement_column_number:].dropna()
 
@@ -147,7 +153,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                 insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start, observer)
 
             elif group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
-                individual = plot.insertSource(EpochGroupContainer.cast_(epoch_group),
+                individual = plot.insertSource(epoch_group,
                                                start,
                                                end,
                                                protocol,
@@ -160,7 +166,7 @@ def _import_file(context, container, protocol, file_name, header_row, timezone, 
                 srcNames = Sets.newHashSet()
                 srcNames.add(individual.getLabel())
                 insert_measurements(epoch, group, i, measurements, plot_name, species, srcNames, start, observer)
-                taggable(epoch).addTag('individual')
+                epoch.addTag('individual')
 
 
     return 0

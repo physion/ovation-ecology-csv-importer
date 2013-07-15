@@ -4,9 +4,7 @@ from nose.tools import istest, assert_equals, assert_true
 import pandas as pd
 import numpy as np
 from ovation import DateTime
-from ovation.core import *
-from ovation.conversion import to_dict
-from ovation.wrapper import taggable, property_annotatable
+from ovation.conversion import to_dict, iterable
 from ovation.testing import TestBase
 
 from field_data.importer import import_csv, \
@@ -36,9 +34,10 @@ class TestImporter(TestBase):
 
         cls.ctx, cls.expt, cls.protocol = cls.make_experiment_fixture()
 
+        print("Importing example field data: {}".format(EXAMPLE_FIELD_DATA_CSV))
         import_csv(cls.ctx,
-                   container_id=str(cls.expt.getUuid()),
-                   protocol_id=str(cls.protocol.getUuid()),
+                   container_uri=str(cls.expt.getURI().toString()),
+                   protocol_uri=str(cls.protocol.getURI().toString()),
                    files=[EXAMPLE_FIELD_DATA_CSV])
 
     def setup(self):
@@ -54,7 +53,7 @@ class TestImporter(TestBase):
 
         sources = self.ctx.getTopLevelSources()
         src_map = {}
-        for s in sources:
+        for s in iterable(sources):
             src_map[s.getLabel()] = s
 
         for name in expected_source_names:
@@ -62,21 +61,21 @@ class TestImporter(TestBase):
 
 
     def group_sites(self):
-        return self.df.groupby([lambda x: x, lambda y: self.df.loc[y]['Site']])
+        return self.df.groupby([self.df.index, 'Site'])
 
     @istest
     def should_add_one_epoch_group_for_each_day(self):
         number_of_days = np.unique(np.asarray(self.df.index)).size
 
-        assert_equals(number_of_days, len(list(EpochGroupContainer.cast_(self.expt).getEpochGroups())))
+        assert_equals(number_of_days, len(list(iterable(self.expt.getEpochGroups()))))
 
     def check_epoch_per_site(self, container):
         # One Epoch per site per day
         num_sites = len(self.group_sites())
         n_epochs = 0
-        for group in EpochGroupContainer.cast_(container).getEpochGroups():
+        for group in iterable(container.getEpochGroups()):
             # Skip Epochs specifically for producing Sources
-            n_epochs += len([e for e in list(EpochContainer.cast_(group).getEpochs()) if e.getOutputSources().size() == 0])
+            n_epochs += len([e for e in list(iterable(group.getEpochs())) if e.getOutputSources().size() == 0])
         assert_equals(num_sites, n_epochs)
 
     @istest
@@ -89,15 +88,15 @@ class TestImporter(TestBase):
         protocol2 = self.ctx.insertProtocol("protocol", "description")
 
         import_csv(self.ctx,
-                   container_id=str(expt2.getUuid()),
-                   protocol_id=str(protocol2.getUuid()),
+                   container_uri=expt2.getURI().toString(),
+                   protocol_uri=protocol2.getURI().toString(),
                    files=[EXAMPLE_FIELD_DATA_CSV])
 
         expected_source_names = np.unique(self.df.Site)
 
         sources = self.ctx.getTopLevelSources()
 
-        assert_equals(len(expected_source_names), len(list(sources)))
+        assert_equals(len(expected_source_names), len(list(iterable(sources))))
 
     @istest
     def should_use_existing_site_epoch_when_present(self):
@@ -105,13 +104,13 @@ class TestImporter(TestBase):
         protocol2 = self.ctx.insertProtocol("protocol", "description")
 
         import_csv(self.ctx,
-                   container_id=str(expt2.getUuid()),
-                   protocol_id=str(protocol2.getUuid()),
+                   container_uri=expt2.getURI().toString(),
+                   protocol_uri=protocol2.getURI().toString(),
                    files=[EXAMPLE_FIELD_DATA_CSV])
 
         import_csv(self.ctx,
-                   container_id=str(expt2.getUuid()),
-                   protocol_id=str(protocol2.getUuid()),
+                   container_uri=expt2.getURI().toString(),
+                   protocol_uri=protocol2.getURI().toString(),
                    files=[EXAMPLE_FIELD_DATA_CSV])
 
         self.check_epoch_per_site(expt2)
@@ -120,12 +119,12 @@ class TestImporter(TestBase):
     def should_tag_site_with_species(self):
         species = set(self.df.Species)
 
-        for group in EpochGroupContainer.cast_(self.expt).getEpochGroups():
-            for epoch in EpochContainer.cast_(group).getEpochs():
+        for group in iterable(self.expt.getEpochGroups()):
+            for epoch in iterable(group.getEpochs()):
                 src_map = to_dict(epoch.getInputSources())
                 for src in src_map.values():
-                    if len(list(src.getParentSources())) == 0:
-                        tags = set(taggable(src).getAllTags())
+                    if len(list(iterable(src.getParentSources()))) == 0:
+                        tags = set(iterable(src.getAllTags()))
                         assert(len(tags) > 0)
                         for tag in tags:
                             assert(tag in species)
@@ -133,8 +132,8 @@ class TestImporter(TestBase):
 
     def epoch_groups_by_timestamp(self):
         epoch_groups = {}
-        for grp in EpochGroupContainer.cast_(self.expt).getEpochGroups():
-            d = TimelineElement.cast_(grp).getStart()
+        for grp in iterable(self.expt.getEpochGroups()):
+            d = grp.getStart()
             ts = pd.Timestamp(
                 datetime.datetime(d.getYear(), d.getMonthOfYear(), d.getDayOfMonth(), d.getHourOfDay(),
                                   d.getMinuteOfHour(),
@@ -153,7 +152,7 @@ class TestImporter(TestBase):
             for i in xrange(len(group)):
                 if group['Type'][i] == MEASUREMENT_TYPE_SITE:
                     m = e.getMeasurement(group['Species'][i])
-                    csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                    csv_path = m.getLocalDataPath().get()
                     data = pd.read_csv(csv_path)
                     expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
                     assert(np.all(data[group['Counting'][i]] == expected_measurements))
@@ -170,16 +169,16 @@ class TestImporter(TestBase):
 
             for i in xrange(len(group)):
                 if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
-                    for m in e.getMeasurements():
+                    for m in iterable(e.getMeasurements()):
                         if m.getName().startswith(u"{}_{}".format(group['Species'][i],i+1)):
-                            csv_path = DataElement.cast_(m).getLocalDataPath().get()
+                            csv_path = m.getLocalDataPath().get()
                             data = pd.read_csv(csv_path)
                             expected_measurements = group.iloc[i, FIRST_MEASUREMENT_COLUMN_NUMBER:].dropna()
                             assert(np.all(data[group['Counting'][i]] == expected_measurements))
 
     def collect_epochs_by_site(self, epoch_groups, ts):
         epochs = {}
-        for e in EpochContainer.cast_(epoch_groups[ts]).getEpochs():
+        for e in iterable(epoch_groups[ts].getEpochs()):
             sources = to_dict(e.getInputSources())
             for s in sources.values():
                 if s.getLabel() in self.df.Site.base:
@@ -194,7 +193,7 @@ class TestImporter(TestBase):
             epochs = self.collect_epochs_by_site(epoch_groups, ts)
 
             e = epochs[site]
-            if 'individual' in list(taggable(e).getAllTags()):
+            if 'individual' in list(iterable(e.getAllTags())):
                 for i in xrange(len(group)):
                     if group['Type'][i] == MEASUREMENT_TYPE_INDIVIDUAL:
                         print(e.getInputSources(), group['Species'][i], i)
@@ -212,9 +211,9 @@ class TestImporter(TestBase):
             e = epochs[site]
 
             for i in xrange(len(group)):
-                if len(list(e.getMeasurements())) > 0:
+                if len(list(iterable(e.getMeasurements()))) > 0:
                     m = e.getMeasurement(group['Species'][i])
-                    assert_equals(group['Observer'][i], str(property_annotatable(m).getUserProperty(self.ctx.getAuthenticatedUser(), 'Observer')))
+                    assert_equals(group['Observer'][i], str(m.getUserProperty(self.ctx.getAuthenticatedUser(), 'Observer')))
 
     @istest
     def should_call_via_main(self):
@@ -224,11 +223,11 @@ class TestImporter(TestBase):
         number_of_days = np.unique(np.asarray(self.df.index)).size
 
         args = ['--timezone=America/New_York',
-                '--container={}'.format(str(expt2.getUuid())),
-                '--protocol={}'.format(str(protocol2.getUuid())),
+                '--container={}'.format(str(expt2.getURI().toString())),
+                '--protocol={}'.format(str(protocol2.getURI().toString())),
                 EXAMPLE_FIELD_DATA_CSV,
                 ]
 
         main(args, dsc=self.dsc)
 
-        assert_equals(number_of_days, len(list(EpochGroupContainer.cast_(expt2).getEpochGroups())))
+        assert_equals(number_of_days, len(list(iterable(expt2.getEpochGroups()))))

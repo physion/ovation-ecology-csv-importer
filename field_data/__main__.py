@@ -36,8 +36,8 @@ def main(args=sys.argv, dsc=None):
                        **args):
 
         return import_csv(ctx,
-                          container_id=container,
-                          protocol_id=protocol,
+                          container_uri=container,
+                          protocol_uri=protocol,
                           files=files,
                           timezone=timezone,
                           csv_header_row=header_rows,
