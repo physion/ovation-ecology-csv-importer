@@ -10,11 +10,12 @@ import time
 import pandas as pd
 
 
-from ovation import DateTimeZone, DateTime, Sets, Maps, autoclass, URL
+from ovation import DateTimeZone, DateTime, Sets, Maps, autoclass
 from ovation.conversion import to_dict, iterable, asclass
 from jnius.jnius import JavaException
 
 Optional = autoclass("com.google.common.base.Optional")
+File = autoclass("java.io.File")
 
 from field_data.utils import read_csv
 
@@ -69,7 +70,7 @@ def insert_measurements(epoch, group, i, measurements, plot_name, species, srcNa
         delete=False)
     temp_data_frame = pd.DataFrame({group['Counting'][i]: measurements})
     temp_data_frame.to_csv(tmp.name, index_label="Measurement")
-    m = epoch.insertMeasurement(species, srcNames, Sets.newHashSet(), URL("file://{}".format(tmp.name)), 'text/csv')
+    m = epoch.insertMeasurement(species, srcNames, Sets.newHashSet(), File(tmp.name).toURI().toURL(), 'text/csv')
     time.sleep(1.0)
     m.addProperty('Observer', str(observer))
 
