@@ -2,7 +2,7 @@
 
 from setuptools import setup
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 OVATION_VERSION = "2.0-beta2"
 
 setup(name='field-data',
